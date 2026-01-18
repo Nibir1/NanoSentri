@@ -23,7 +23,7 @@ from optimum.onnxruntime import ORTModelForCausalLM
 from transformers import AutoTokenizer, set_seed
 
 # --- Config ---
-MODEL_PATH = "../phi3_export/phi3_int4_final" # Path to the quantized model directory
+MODEL_PATH = "./phi3_export/phi3_int4_final" # Path to the quantized model directory
 PROMPT = "Error code 503 detected on WXT536 sensor. Input voltage 5V."
 ITERATIONS = 3  # Run 3 times to get an average
 

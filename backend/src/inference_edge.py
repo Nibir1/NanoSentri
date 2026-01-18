@@ -10,6 +10,7 @@ Purpose:
 Endpoints:
     POST /diagnose: Accepts a sensor log/query and returns a technical response.
     GET /health: Simple heartbeat check.
+    GET /benchmark: Returns hardware performance stats from benchmark report.
 
 Configuration:
     - Uses 'optimum.onnxruntime' for inference.
@@ -22,83 +23,59 @@ Usage:
 
 import time
 import logging
+import pandas as pd
+import os
 from contextlib import asynccontextmanager
 from typing import Optional
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from optimum.onnxruntime import ORTModelForCausalLM
 from transformers import AutoTokenizer, set_seed
 
 # --- Configuration ---
-MODEL_PATH = "./phi3_export/phi3_int4_final" # Path to the quantized model directory
-MAX_TOKENS = 256
-TEMPERATURE = 0.3  # Low temperature for technical precision
+MODEL_PATH = "./phi3_export/phi3_int4_final" 
+BENCHMARK_FILE = "benchmark_report.csv"
+MAX_TOKENS = 50 
+TEMPERATURE = 0.3 
 
-# --- Logging Setup ---
-logging.basicConfig(
-    format="%(asctime)s - [NanoSentri] - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- Global State ---
-# We store the model in a global dict to access it across requests
 ml_resources = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Load model on startup, unload on shutdown.
-    Prevents reloading the model for every single request.
-    """
     logger.info(f"BOOT SEQUENCE: Loading model from {MODEL_PATH}...")
-    start_time = time.time()
-    
     try:
-        # CRITICAL FIX: Matching your working run_inference.py settings
-        model = ORTModelForCausalLM.from_pretrained(
-            MODEL_PATH,
-            use_cache=False,
-            use_io_binding=False
-        )
-        
-        # CRITICAL FIX: use_fast=False for stability
+        model = ORTModelForCausalLM.from_pretrained(MODEL_PATH, use_cache=False, use_io_binding=False)
         tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, use_fast=False)
-        
         ml_resources["model"] = model
         ml_resources["tokenizer"] = tokenizer
-        
-        logger.info(f"READY. Model loaded in {time.time() - start_time:.2f}s")
+        logger.info("READY.")
         yield
-        
     except Exception as e:
-        logger.critical(f"FATAL: Could not load model. Error: {e}")
+        logger.critical(f"FATAL: {e}")
         raise e
     finally:
-        logger.info("SHUTDOWN: Cleaning up resources...")
         ml_resources.clear()
 
-# --- API Definition ---
-app = FastAPI(
-    title="NanoSentri Edge API",
-    description="Offline Industrial Diagnostics for Vaisala Sensors",
-    version="1.0.0",
-    lifespan=lifespan
+app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# --- Data Models ---
 class DiagnosticRequest(BaseModel):
     query: str
-    context: Optional[str] = None # Optional raw log data
-    max_tokens: int = 150
+    context: Optional[str] = None
+    max_tokens: int = 50
 
-class DiagnosticResponse(BaseModel):
-    diagnosis: str
-    inference_time_sec: float
-    model_version: str
-
-# --- Endpoints ---
-
+# --- HEALTH CHECK ENDPOINT ---
 @app.get("/health")
 def health_check():
     """Heartbeat endpoint for system monitoring."""
@@ -106,16 +83,32 @@ def health_check():
         raise HTTPException(status_code=503, detail="Model not loaded")
     return {"status": "online", "device": "cpu_edge"}
 
-@app.post("/diagnose", response_model=DiagnosticResponse)
+# --- GET HARDWARE STATS ---
+@app.get("/benchmark")
+def get_benchmark_stats():
+    """Reads the CSV report and returns summary stats."""
+    if not os.path.exists(BENCHMARK_FILE):
+        return {"status": "no_data"}
+    
+    try:
+        df = pd.read_csv(BENCHMARK_FILE)
+        # Calculate averages from the CSV
+        return {
+            "status": "success",
+            "avg_tps": round(df["tokens_per_sec"].mean(), 2),
+            "peak_memory_mb": round(df["memory_mb"].max(), 2),
+            "load_time_sec": 9.66, # Hardcoded from your log, or you can save it to CSV too
+            "device": "CPU (INT4)"
+        }
+    except Exception as e:
+        logger.error(f"Failed to read benchmark: {e}")
+        return {"status": "error"}
+
+@app.post("/diagnose")
 def run_diagnostic(request: DiagnosticRequest):
-    """
-    Main inference endpoint.
-    Takes a technical question/log and returns an expert analysis.
-    """
     model = ml_resources["model"]
     tokenizer = ml_resources["tokenizer"]
     
-    # 1. Prompt Engineering (Phi-3 Format)
     if request.context:
         prompt_content = f"{request.query}\n\nTechnical Context:\n{request.context}"
     else:
@@ -124,19 +117,10 @@ def run_diagnostic(request: DiagnosticRequest):
     messages = [{"role": "user", "content": prompt_content}]
     
     try:
-        # Apply chat template
-        input_text = tokenizer.apply_chat_template(
-            messages, 
-            tokenize=False, 
-            add_generation_prompt=True
-        )
-        
+        input_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = tokenizer(input_text, return_tensors="pt")
         
-        # 2. Inference
         start_ts = time.time()
-        
-        # Set seed for reproducibility in diagnostics
         set_seed(42) 
         
         outputs = model.generate(
@@ -144,29 +128,22 @@ def run_diagnostic(request: DiagnosticRequest):
             max_new_tokens=request.max_tokens,
             temperature=TEMPERATURE,
             do_sample=True,
-            top_p=0.9,
-            repetition_penalty=1.1 # Prevent looping on error codes
         )
         
         inference_time = time.time() - start_ts
         
-        # 3. Decode
-        full_response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
-        # Extract only the assistant's part
-        # Phi-3 typically formats as: <|user|>...<|end|><|assistant|>...
-        if "<|assistant|>" in full_response:
-            clean_response = full_response.split("<|assistant|>")[-1].strip()
-        else:
-            # Fallback if specific tokens are stripped differently
-            clean_response = full_response.replace(input_text, "").strip()
+        # --- CRITICAL FIX: DECODE ONLY NEW TOKENS ---
+        # This prevents the prompt (input) from being repeated in the output
+        input_length = inputs.input_ids.shape[1]
+        generated_tokens = outputs[0][input_length:]
+        clean_response = tokenizer.decode(generated_tokens, skip_special_tokens=True)
 
-        return DiagnosticResponse(
-            diagnosis=clean_response,
-            inference_time_sec=round(inference_time, 2),
-            model_version="phi3-int4-vaisala-v1"
-        )
+        return {
+            "diagnosis": clean_response.strip(),
+            "inference_time_sec": round(inference_time, 2),
+            "model_version": "phi3-int4-vaisala-v1"
+        }
         
     except Exception as e:
         logger.error(f"Inference failed: {e}")
-        raise HTTPException(status_code=500, detail="Internal Inference Error")
+        raise HTTPException(status_code=500, detail=str(e))
