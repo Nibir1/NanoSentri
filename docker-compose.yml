@@ -1,0 +1,28 @@
+services:
+  # -----------------------------
+  # 1. AI ENGINE (Backend)
+  # -----------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nanosentri-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_PATH=/app/phi3_export/phi3_int4_final
+    restart: unless-stopped
+
+  # -----------------------------
+  # 2. DASHBOARD (Frontend)
+  # -----------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nanosentri-dashboard
+    ports:
+      - "3000:80" # Map localhost:3000 to container:80
+    depends_on:
+      - backend
+    restart: unless-stopped

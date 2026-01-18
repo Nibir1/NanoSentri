@@ -34,7 +34,10 @@ from optimum.onnxruntime import ORTModelForCausalLM
 from transformers import AutoTokenizer, set_seed
 
 # --- Configuration ---
-MODEL_PATH = "./phi3_export/phi3_int4_final" 
+# Docker sets "MODEL_PATH", otherwise we use the relative local path
+DEFAULT_PATH = "./phi3_export/phi3_int4_final"
+MODEL_PATH = os.getenv("MODEL_PATH", DEFAULT_PATH)
+
 BENCHMARK_FILE = "benchmark_report.csv"
 MAX_TOKENS = 50 
 TEMPERATURE = 0.3 
