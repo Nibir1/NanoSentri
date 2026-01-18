@@ -1,7 +1,7 @@
 .PHONY: help build up down logs clean shell-backend test
 
 help:
-	@echo "🚀 CertifyFlow Makefile Commands"
+	@echo "CertifyFlow Makefile Commands"
 	@echo "================================="
 	@echo "make build   : Rebuild all containers (clean build)"
 	@echo "make up      : Start the system"
@@ -13,11 +13,11 @@ help:
 build:
 	docker-compose build --no-cache
 	docker-compose up -d
-	@echo "✅ Application running at http://localhost:3000"
+	@echo "Application running at http://localhost:3000"
 
 up:
 	docker-compose up -d
-	@echo "✅ Application running at http://localhost:3000"
+	@echo "Application running at http://localhost:3000"
 down:
 	docker-compose down
 
@@ -26,10 +26,10 @@ logs:
 
 # Nuclear option: wipes database data too
 clean:
-	@echo "🧼 Cleaning up Docker containers, networks, and volumes..."
+	@echo "Cleaning up Docker containers, networks, and volumes..."
 	docker-compose down -v
 	docker system prune -f
-	@echo "🧹 Cleaning Python bytecode, cache, and coverage files..."
+	@echo "Cleaning Python bytecode, cache, and coverage files..."
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 	find . -type f -name "*.pyo" -delete
@@ -38,7 +38,7 @@ clean:
 	find . -type d -name ".mypy_cache" -exec rm -rf {} +
 	find . -type f -name ".coverage" -delete
 	find . -type d -name "htmlcov" -exec rm -rf {} +
-	@echo "✅ Clean complete."
+	@echo "Clean complete."
 
 # Debugging helper
 shell-backend:
@@ -46,10 +46,14 @@ shell-backend:
 
 # Run tests inside the running docker container
 test:
-	@echo "🧪 Running backend tests..."
-	docker-compose exec backend env PYTHONPATH=. pytest --cov=app tests/ -v
-	
-	@echo "🧪 Running frontend tests..."
+	@echo "---------------------------------------"
+	@echo "Running BACKEND tests (Pytest + Cov)"
+	@echo "---------------------------------------"
+	docker-compose exec backend pytest --cov=src tests/ -v
+
+	@echo "---------------------------------------"
+	@echo "Running FRONTEND tests (Vitest)"
+	@echo "---------------------------------------"
 	docker-compose exec frontend npm test -- --run
-	
-	@echo "✅ Tests completed."
+
+	@echo "All Tests Completed Successfully."

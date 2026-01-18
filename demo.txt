@@ -1,0 +1,3 @@
+Technical Query: Why is the wind sensor not reporting data?
+
+Sensor Logs / Context: [2026-06-12T04:15:22] ID:LOG-WXT536 DEVICE:WXT536-A >>> HEAT_CURRENT: 0.00A | TEMP_AMB: -15.2C | STATUS: ICE_WARNING

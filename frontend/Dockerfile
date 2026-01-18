@@ -1,24 +1,17 @@
-# --- Stage 1: Build ---
-FROM node:20-alpine AS build
+# Development Dockerfile for Testing & Hot-Reload
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dependencies
+# Install deps
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
-# Copy source and build
+# Copy source
 COPY . .
-RUN npm run build
 
-# --- Stage 2: Serve ---
-FROM nginx:alpine
+# Expose Vite port
+EXPOSE 5173
 
-# Copy built assets from Stage 1 to Nginx
-COPY --from=build /app/dist /usr/share/nginx/html
-
-# Expose HTTP port
-EXPOSE 80
-
-# Start Nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Start Dev Server (Host 0.0.0.0 is needed for Docker)
+CMD ["npm", "run", "dev", "--", "--host"]

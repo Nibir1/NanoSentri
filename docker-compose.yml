@@ -11,6 +11,10 @@ services:
       - "8000:8000"
     environment:
       - MODEL_PATH=/app/phi3_export/phi3_int4_final
+      - PYTHONPATH=/app
+    volumes:                 # <--- ADD THIS BLOCK
+      - ./backend/src:/app/src
+      - ./backend/tests:/app/tests
     restart: unless-stopped
 
   # -----------------------------
@@ -22,7 +26,9 @@ services:
       dockerfile: Dockerfile
     container_name: nanosentri-dashboard
     ports:
-      - "3000:80" # Map localhost:3000 to container:80
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
     depends_on:
       - backend
     restart: unless-stopped
