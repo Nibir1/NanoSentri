@@ -62,7 +62,7 @@ We perform the final ONNX conversion locally to handle the large export graph wi
 
 ### 3. The Interface Layer (Edge - Frontend)
 - **Framework:** React 18 + TypeScript + Vite.
-- **Styling:** Tailwind CSS (Vaisala Industrial Theme).
+- **Styling:** Tailwind CSS.
 - **UX:** Real-time "Processing" states and Hardware Stats dashboard.
 
 ---
@@ -171,7 +171,7 @@ We utilize a `Makefile` to standardize the development lifecycle across the engi
 
 ## Project Structure
 
-A clean "Monorepo" architecture designed for easy auditing by Vaisala IT.
+A clean "Monorepo" architecture designed for easy auditing.
 
 ```text
 NanoSentri/
